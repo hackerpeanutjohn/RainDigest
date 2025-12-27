@@ -138,12 +138,16 @@ def main():
                 <hr>
                 """
                 
+                # Extract Cover Image
+                cover_url = item.get('cover')
+                
                 readwise_client.save_summary(
                     url=url,
                     title=final_title_str,
                     summary_html=html_header + html_content,
                     tags=[c_title], # Tags: Collection Name Only
-                    author=uploader
+                    author=uploader,
+                    image_url=cover_url
                 )
                 
                 # 8. Update Raindrop

@@ -19,6 +19,7 @@ class ReadwiseClient:
                      summary_html: str, 
                      tags: List[str] = None,
                      author: str = None,
+                     image_url: str = None,
                      public_url: str = None) -> bool:
         """
         Save the summary to Readwise Reader.
@@ -33,6 +34,7 @@ class ReadwiseClient:
             "html": summary_html, # Provide the summary as the content
             "tags": tags or [],
             "author": author,
+            "image_url": image_url,
             "saved_using": "RaindropAutoAgent"
         }
         

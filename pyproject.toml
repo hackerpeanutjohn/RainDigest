@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "raindrop-video-summarizer"
+name = "raindigest"
 version = "0.1.0"
 description = "Raindrop.io Video Summarizer with LLM"
 authors = ["Antigravity"]

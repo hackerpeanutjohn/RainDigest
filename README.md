@@ -1,4 +1,4 @@
-# Raindrop Video Summarizer
+# RainDigest
 
 Automates the process of fetching video bookmarks from Raindrop.io, downloading/transcribing them, and generating structured summaries using AI (Gemini or OpenAI).
 

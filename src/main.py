@@ -38,6 +38,11 @@ def main():
     collections = raindrop_client.get_collections()
     logger.info(f"Found {len(collections)} collections to process (skipping Unsorted).")
     
+    # 2.5 Run Cleanup (once per run)
+    from .storage import r2_storage
+    if r2_storage.enabled:
+        r2_storage.cleanup_old_files(retention_days=30)
+    
     # Global processed counter
     processed_count = 0
     

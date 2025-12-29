@@ -42,7 +42,10 @@ class Settings:
 
     def validate(self):
         if not self.RAINDROP_TOKEN:
-            raise ValueError("RAINDROP_TEST_TOKEN environment variable is not set.")
+            raise ValueError(
+                "RAINDROP_TOKEN is missing. Please check your .env file. "
+                "See README.md -> 'Review Required' or 'Setup' section for instructions."
+            )
         
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

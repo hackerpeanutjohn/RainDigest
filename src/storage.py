@@ -64,4 +64,50 @@ class R2Storage:
             logger.error(f"Storage Error: {e}")
             return None
 
+
+    def cleanup_old_files(self, retention_days: int = 30):
+        """
+        Delete files in R2 bucket older than retention_days.
+        """
+        if not self.enabled:
+            return
+
+        try:
+            from datetime import datetime, timezone, timedelta
+            
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+            logger.info(f"Checking for R2 files older than {retention_days} days (before {cutoff_date})...")
+
+            # List objects
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(Bucket=settings.R2_BUCKET_NAME)
+
+            objects_to_delete = []
+            
+            for page in page_iterator:
+                if 'Contents' not in page:
+                    continue
+                
+                for obj in page['Contents']:
+                    if obj['LastModified'] < cutoff_date:
+                        objects_to_delete.append({'Key': obj['Key']})
+
+            if objects_to_delete:
+                logger.info(f"Found {len(objects_to_delete)} old files to delete.")
+                
+                # Delete in batches of 1000 (S3 limit)
+                for i in range(0, len(objects_to_delete), 1000):
+                    batch = objects_to_delete[i:i+1000]
+                    self.s3_client.delete_objects(
+                        Bucket=settings.R2_BUCKET_NAME,
+                        Delete={'Objects': batch}
+                    )
+                    logger.info(f"Deleted batch of {len(batch)} files.")
+            else:
+                logger.info("No old files found to cleanup.")
+
+        except Exception as e:
+            logger.error(f"R2 Cleanup failed: {e}")
+
 r2_storage = R2Storage()
+

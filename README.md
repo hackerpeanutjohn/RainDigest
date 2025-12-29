@@ -18,21 +18,28 @@ Automates the process of fetching video bookmarks from Raindrop.io, downloading/
    - Raindrop.io Account
    - Gemini API Key (Google AI Studio) OR OpenAI API Key.
 
-2. **Configuration**
+## Configuration
    Copy the example environment file:
    ```bash
    cp .env.example .env
    ```
-   Edit `.env`:
-   - **Authentication**: 
+   Edit `.env`. **The following variables are required**:
+
+   - **`RAINDROP_TOKEN`** (Required):
      - Go to [Raindrop Integrations](https://app.raindrop.io/settings/integrations).
      - Create a "New App", name it "VideoSummarizer".
-     - Copy the **Test Token** and paste it into `RAINDROP_TEST_TOKEN`.
-   - **Collection**:
-     - By default `RAINDROP_COLLECTION_ID=0` (Unsorted).
-     - When you first run the app, it will list all your Collections and their IDs in the logs. You can then update `.env` with a specific ID if you want to target a folder.
-   - **LLM**:
-     - Paste your `GEMINI_API_KEY`.
+     - Copy the **Test Token**.
+   - **`GEMINI_API_KEY`** (Required):
+     - Get it from [Google AI Studio](https://aistudio.google.com/).
+
+   **Optional Storage (for Images):**
+   - **`R2_ACCOUNT_ID`**, **`R2_ACCESS_KEY_ID`**, **`R2_SECRET_ACCESS_KEY`**, **`R2_BUCKET_NAME`**, **`R2_PUBLIC_DOMAIN`**:
+     - Required only if you want to host extracted keyframes on Cloudflare R2.
+     - If omitted, images are stored locally in `./output/images`.
+
+   **Other Settings:**
+   - `RAINDROP_COLLECTION_ID`: ID of the collection to watch (default `0` for Unsorted).
+   - `MAX_ITEMS`: Max items to process per run (default `50`).
 
 3. **Run**
    Start the service:
@@ -44,6 +51,18 @@ Automates the process of fetching video bookmarks from Raindrop.io, downloading/
 - Summaries are saved to `./output` folder as Markdown files.
   - **Filename Limit**: Titles are truncated to 50 characters to prevent filesystem errors.
 - Processed bookmarks are tracked in `./data/history.json`.
+
+## Data Privacy & Cloud Storage
+
+### Google Gemini (Audio/Video)
+- Audio and video files are uploaded to Google Gemini for processing.
+- **Privacy**: Files are stored in your Google AI Studio account.
+- **Retention**: This tool relies on Google's default auto-expiry (usually 48 hours for files uploaded via API). They are **not** immediately deleted by this tool to allow for debugging, but they are not public.
+
+### Cloudflare R2 (Images)
+- If R2 is configured, extracted keyframes are uploaded to a public bucket.
+- **Retention**: This tool automatically runs a cleanup job on every execution. **Files older than 30 days are permanently deleted** from the R2 bucket to save costs and privacy.
+- **Public Access**: Files in R2 are accessible via the `R2_PUBLIC_DOMAIN` you configured.
 
 ## Cost Estimation
 This tool heavily relies on **LLM APIs**.

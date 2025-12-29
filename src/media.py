@@ -65,6 +65,7 @@ class VideoProcessor:
                 video_id = info.get('id')
                 
                 # Extract Metadata
+                meta['id'] = video_id
                 meta['duration'] = info.get('duration', 0)
                 meta['uploader'] = info.get('uploader') or info.get('channel') or "Unknown"
                 meta['title'] = info.get('title')
@@ -112,16 +113,15 @@ class VideoProcessor:
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-                
-            seen_lines = set() # Dedup lines that might repeat in vtt
+            
+            seen_lines = set()
             for line in lines:
                 line = line.strip()
                 if not line: continue
-                if '-->' in line: continue # Timestamp
-                if line.isdigit(): continue # Sequnce number
+                if '-->' in line: continue 
+                if line.isdigit(): continue
                 if line.startswith('WEBVTT'): continue
                 
-                # Basic dedup
                 if line not in seen_lines:
                     content.append(line)
                     seen_lines.add(line)
@@ -130,3 +130,108 @@ class VideoProcessor:
         except Exception as e:
             logger.error(f"Error parsing subtitle {path}: {e}")
             return None
+
+    def get_transcript_with_timestamps(self, video_id: str) -> str:
+        """
+        Returns raw transcript with timestamps for LLM analysis.
+        Tries to find the best subtitle file and return its content directly.
+        """
+        # Priorities: vtt, srt
+        langs = ['zh-Hant', 'zh-Hans', 'zh', 'en']
+        for lang in langs:
+            for ext in ['vtt', 'srt']:
+                path = self.output_dir / f"{video_id}.{lang}.{ext}"
+                if path.exists():
+                    try:
+                        return path.read_text(encoding='utf-8')
+                    except Exception as e:
+                        logger.error(f"Error reading {path}: {e}")
+        return ""
+
+    def download_video_temp(self, url: str) -> Optional[Path]:
+        """
+        Download video for frame extraction (temp usage).
+        Returns path to .mp4 file.
+        """
+        out_tmpl = str(self.output_dir / "temp_director_video.%(ext)s")
+        # Ensure we get mp4 for opencv compatibility
+        # Force H.264 (avc1) to avoid AV1 issues on some platforms (like ARM64 docker)
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'outtmpl': out_tmpl,
+            'quiet': True,
+            'overwrites': True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+                # Find the file (yt-dlp might change extension slightly?)
+                # We forced mp4/mkv, but let's check.
+                # Usually it will be temp_director_video.mp4
+                p = self.output_dir / "temp_director_video.mp4"
+                if p.exists(): return p
+                # Fallback check
+                for f in self.output_dir.glob("temp_director_video.*"):
+                    return f
+                return None
+        except Exception as e:
+            logger.error(f"Temp video download failed: {e}")
+            return None
+
+    def capture_best_frames(self, video_path: Path, timestamps: list, output_dir: Path) -> list:
+        """
+        Capture frames at specific timestamps.
+        Implements Multi-frame sampling (t, t+1, t+2) to find best image.
+        """
+        import cv2
+        import numpy as np
+        
+        if not cv2 or not video_path.exists():
+            return []
+            
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            logger.error("Failed to open video for capture.")
+            return []
+            
+        saved_frames = []
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        for item in timestamps:
+            target_time = item.get('timestamp', 0)
+            reason = item.get('reason', 'key_moment')
+            
+            best_score = -1
+            best_frame = None
+            best_time = target_time
+            
+            # Multi-frame sampling: check t, t+1, t+1.5
+            offsets = [0, 1.0, 1.5] 
+            
+            for offset in offsets:
+                check_time = target_time + offset
+                cap.set(cv2.CAP_PROP_POS_MSEC, check_time * 1000)
+                ret, frame = cap.read()
+                if not ret: continue
+                
+                # Calculate Information Density (Edge Detection)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray, 100, 200)
+                score = np.mean(edges)
+                
+                if score > best_score:
+                    best_score = score
+                    best_frame = frame
+                    best_time = check_time
+            
+            if best_frame is not None:
+                # Save Frame
+                safe_reason = "".join([c for c in reason if c.isalnum()])[:20]
+                frame_name = f"{int(best_time)}_{safe_reason}.jpg"
+                out_path = output_dir / frame_name
+                cv2.imwrite(str(out_path), best_frame)
+                saved_frames.append(str(out_path))
+                logger.info(f"Captured frame at {best_time}s: {reason}")
+                
+        cap.release()
+        return saved_frames

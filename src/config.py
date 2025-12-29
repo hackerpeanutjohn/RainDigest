@@ -26,9 +26,16 @@ class Settings:
     # System
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
+    # Cloudflare R2
+    R2_ACCOUNT_ID: Optional[str] = os.getenv("R2_ACCOUNT_ID")
+    R2_ACCESS_KEY_ID: Optional[str] = os.getenv("R2_ACCESS_KEY_ID")
+    R2_SECRET_ACCESS_KEY: Optional[str] = os.getenv("R2_SECRET_ACCESS_KEY")
+    R2_BUCKET_NAME: Optional[str] = os.getenv("R2_BUCKET_NAME")
+    R2_PUBLIC_DOMAIN: Optional[str] = os.getenv("R2_PUBLIC_DOMAIN")
+    
     # Debug Control
     DRY_RUN: bool = os.getenv("DRY_RUN", "false").lower() == "true"
-    MAX_ITEMS: int = int(os.getenv("MAX_ITEMS", "10"))
+    MAX_ITEMS: int = int(os.getenv("MAX_ITEMS", "50"))
     
     # Defaults
     DEFAULT_LLM_PROVIDER: str = "gemini" 

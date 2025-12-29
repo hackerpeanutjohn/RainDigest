@@ -1,5 +1,6 @@
 import json
 import time
+import os
 from pathlib import Path
 from loguru import logger
 from datetime import datetime
@@ -88,24 +89,133 @@ def main():
                 
                 # 5. LLM Summarize
                 summary = ""
+                images_md = ""
+
+                # --- AI Director Mode (beta) ---
+                # Only for videos < 10 mins to save bandwidth/time
+                video_id = meta.get('id')
+                duration_sec = meta.get('duration', 0)
+                
+                if video_id and duration_sec > 0 and duration_sec < 600:
+                    logger.info("🎬 Entering AI Director Mode...")
+                if video_id and duration_sec > 0 and duration_sec < 600:
+                    logger.info("🎬 Entering AI Director Mode...")
+                    try:
+                        # 1. Init vars
+                        visual_cues = []
+                        temp_vid_path = None
+                        
+                        # 2. Strategy Selection
+                        raw_transcript = video_processor.get_transcript_with_timestamps(video_id)
+                        
+                        if raw_transcript:
+                            # Strategy A: Text Analysis (Fast, if subs exist)
+                            logger.info("Analyzing Transcript for Visual Cues...")
+                            visual_cues = llm.analyze_visual_cues(raw_transcript)
+                            
+                            if visual_cues:
+                                # We have cues, NOW download the video to capture them
+                                logger.info(f"Found {len(visual_cues)} cues. Downloading video...")
+                                temp_vid_path = video_processor.download_video_temp(url)
+                                
+                        else:
+                            # Strategy B: Video Analysis (Accurate, Fallback for FB/Reels)
+                            logger.info("No transcript found. Downloading Video for Visual Analysis...")
+                            temp_vid_path = video_processor.download_video_temp(url)
+                            
+                            if temp_vid_path and temp_vid_path.exists():
+                                logger.info("Video downloaded. Asking AI to watch and find highlights...")
+                                visual_cues = llm.analyze_visual_cues_from_video(temp_vid_path)
+
+                        # 3. Execution (Capture)
+                        logger.info(f"AI Final Decision: {len(visual_cues)} visual cues found.")
+                        
+                        if visual_cues and temp_vid_path and temp_vid_path.exists():
+                                    # 4. Capture Frames
+                                    frames_dir = settings.OUTPUT_DIR / "images" / video_id
+                                    frames = video_processor.capture_best_frames(temp_vid_path, visual_cues, frames_dir)
+                                    logger.info(f"Captured {len(frames)} frames.")
+                                    
+                                    # 5. Cleanup Video (Only if we are done with it)
+                                    # Actually we delete it at the end of this block usually
+                                    
+                                    # 6. Upload to R2 and Delete Local
+                                    from .storage import r2_storage
+                                    import hashlib
+                                    
+                                    if frames:
+                                        images_md = "\n\n## 🎬 Visual Highlights\n"
+                                        
+                                        # For Readwise HTML
+                                        images_html_block = "<h3>🎬 Visual Highlights</h3>"
+                                        
+                                        for frame_path_str in frames:
+                                            f_path = Path(frame_path_str)
+                                            
+                                            # Default to local path for detailed Markdown
+                                            rel_path = f_path.relative_to(settings.OUTPUT_DIR)
+                                            link_url = str(rel_path) 
+                                            
+                                            # Attempt R2 Upload
+                                            if r2_storage.enabled:
+                                                # Use Content Hash for Filename to allow deduplication/caching
+                                                file_hash = hashlib.md5(f_path.read_bytes()).hexdigest()
+                                                object_key = f"images/{file_hash}.jpg"
+                                                
+                                                public_url = r2_storage.upload_file(f_path, object_key)
+                                                
+                                                if public_url:
+                                                    link_url = public_url
+                                                    # Remove local file to save space
+                                                    if f_path.exists():
+                                                        os.remove(f_path)
+                                                    logger.info(f"Uploaded & Deleted: {f_path.name} -> {object_key}")
+                                            
+                                            # Append to outputs
+                                            images_md += f"![Key Frame]({link_url})\n"
+                                            images_html_block += f'<img src="{link_url}" alt="Key Frame" style="max-width:100%; margin-top:10px; border-radius:8px;"><br>'
+                                        
+                                        images_html_block += "<hr>"
+
+                                        # Clean up empty dir if all deleted
+                                        if r2_storage.enabled:
+                                            try:
+                                                frames_dir.rmdir() 
+                                            except: 
+                                                pass
+
+                        # Final Cleanup of temp video
+                        if temp_vid_path and temp_vid_path.exists():
+                            os.remove(temp_vid_path)
+                            
+                    except Exception as e:
+                        logger.error(f"AI Director Mode failed: {e}")
+                # -------------------------------
+                # -------------------------------
+
                 if transcript:
                     summary = llm.summarize_text(transcript)
                 elif audio_path:
                     summary = llm.process_audio(audio_path)
                 
                 # 6. Prepare Output Metadata
+                # Re-extract to ensure scope availability
                 duration_sec = meta.get('duration', 0)
                 uploader = meta.get('uploader', 'Unknown')
+                
+                # AI Title Generation
+                logger.info("Generating concise title...")
+                ai_title = llm.generate_concise_title(summary, raindrop_title)
+                logger.info(f"AI Title: {ai_title}")
                 
                 # Filename Type Logic
                 # > 8 mins (480s) = Video, else Short
                 type_prefix = "[Video]" if duration_sec > 480 else "[Short]"
                 
-                # Filename: [Type] Title - Speaker
-                # Sanitize components
                 def sanitize(s): return "".join([c for c in s if c.isalnum() or c in (' ','-','_')]).strip()
                 
-                final_title_str = f"{type_prefix} {sanitize(raindrop_title)} - {sanitize(uploader)}"
+                # Use AI Title instead of raw title
+                final_title_str = f"{type_prefix} {sanitize(ai_title)} - {sanitize(uploader)}"
                 
                 # Truncate if too long (max 100 to be safe logic?)
                 if len(final_title_str) > 100:
@@ -113,9 +223,15 @@ def main():
                 
                 filename = f"{final_title_str}.md"
                 output_path = settings.OUTPUT_DIR / filename
+
                 
-                # Markdown Content
-                md_content = f"# {raindrop_title}\n\n**Source**: {url}\n**Author**: {uploader}\n**Collection**: {c_title}\n\n{summary}"
+                # Markdown Content: Header -> Images -> Summary
+                md_content = f"# {raindrop_title}\n\n**Source**: {url}\n**Author**: {uploader}\n**Collection**: {c_title}\n"
+                
+                if images_md:
+                     md_content += images_md
+                
+                md_content += f"\n{summary}"
                 
                 # Save Local
                 with open(output_path, "w", encoding="utf-8") as f:
@@ -128,7 +244,7 @@ def main():
                 
                 # Convert Markdown to HTML for Reader API
                 # Extensions: extra (tables, footnotes), nl2br (newlines to br)
-                html_content = markdown.markdown(summary, extensions=['extra', 'nl2br'])
+                html_rendered_summary = markdown.markdown(summary, extensions=['extra', 'nl2br'])
                 
                 # Add Metadata header to HTML
                 html_header = f"""
@@ -138,13 +254,20 @@ def main():
                 <hr>
                 """
                 
+                # HTML Content: Header -> Images -> Summary
+                final_html_body = html_header
+                if 'images_html_block' in locals() and images_html_block:
+                    final_html_body += images_html_block
+                
+                final_html_body += html_rendered_summary
+                
                 # Extract Cover Image
                 cover_url = item.get('cover')
                 
                 readwise_client.save_summary(
                     url=url,
                     title=final_title_str,
-                    summary_html=html_header + html_content,
+                    summary_html=final_html_body,
                     tags=[c_title], # Tags: Collection Name Only
                     author=uploader,
                     image_url=cover_url
@@ -165,6 +288,7 @@ def main():
                 # Cleanup
                 if audio_path and audio_path.exists():
                     os.remove(audio_path)
+                    logger.info(f"Deleted audio file: {audio_path.name}")
                     
             except Exception as e:
                 logger.error(f"Error processing {raindrop_title}: {e}")

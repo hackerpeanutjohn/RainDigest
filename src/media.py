@@ -162,6 +162,15 @@ class VideoProcessor:
             'quiet': True,
             'overwrites': True,
         }
+        # Prevent stale file usage: explicitly delete temp file if it exists
+        temp_file = self.output_dir / "temp_director_video.mp4"
+        if temp_file.exists():
+            try:
+                os.remove(temp_file)
+                logger.info("Removed stale temp video file.")
+            except OSError:
+                pass
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])

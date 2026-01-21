@@ -37,6 +37,9 @@ class Settings:
     DRY_RUN: bool = os.getenv("DRY_RUN", "false").lower() == "true"
     MAX_ITEMS: int = int(os.getenv("MAX_ITEMS", "50"))
     
+    # Feature Flags
+    ENABLE_AUTO_ORGANIZER: bool = os.getenv("ENABLE_AUTO_ORGANIZER", "true").lower() == "true"
+    
     # Defaults
     DEFAULT_LLM_PROVIDER: str = "gemini" 
 

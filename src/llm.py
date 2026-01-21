@@ -19,6 +19,10 @@ class LLMProvider(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def classify_bookmark(self, title: str, note: str, collections: dict) -> Optional[int]:
+        pass
+
 class GeminiProvider(LLMProvider):
     def __init__(self):
         if not settings.GEMINI_API_KEY:
@@ -240,25 +244,63 @@ class GeminiProvider(LLMProvider):
         Generate a concise, descriptive title based on summary and metadata.
         """
         prompt = f"""
-你是一位專業的編輯。請根據以下內容，生成一個「精簡、吸睛且準確」的標題 (Title)。
-
-**原始標題**: {original_title}
-**內容摘要**: 
-{summary[:1000]}... (略)
-
-**要求**:
-1. 繁體中文。
-2. 長度控制在 15-20 字以內。
-3. 去除原標題中的 SEO 標籤 (如 #hashtag, @username)。
-4. 重點在於「這部影片在講什麼知識點」。
-5. **只回傳標題本身**，不要有任何引號或其他文字。
-"""
+        Generate a concise (under 80 chars), descriptive filename-friendly title for this content.
+        Do NOT use colons, slashes, or special characters.
+        Use spaces or hyphens.
+        
+        Original Title: {original_title}
+        Summary: {summary[:1000]}
+        
+        Title:
+        """
+        
         try:
             response = self.model.generate_content(prompt)
-            return response.text.strip().replace('"', '').replace('「', '').replace('」', '')
+            return response.text.strip()
         except Exception as e:
-            logger.error(f"Title generation failed: {e}")
-            return original_title[:50] # Fallback
+            logger.error(f"Title Gen Error: {e}")
+            return original_title
+
+    def classify_bookmark(self, title: str, note: str, collections: dict) -> Optional[int]:
+        """
+        Analyze the bookmark and suggest the best collection ID.
+        Returns None if no suitable collection found or uncertain.
+        """
+        # Format collections for prompt
+        cols_text = "\n".join([f"{cid}: {cname}" for cid, cname in collections.items()])
+        
+        prompt = f"""
+        You are a highly organized personal librarian. 
+        Analyze the following bookmark and categorize it into ONE of the provided collections.
+        
+        Bookmark Details:
+        - Title: {title}
+        - Note/Excerpt: {note[:500]}
+        
+        Available Collections (ID: Name):
+        {cols_text}
+        
+        Instructions:
+        1. Select the SINGLE BEST collection ID that fits this content.
+        2. If the content fits multiple, choose the most specific one.
+        3. If it doesn't fit ANY clearly, return "0".
+        4. Return ONLY the ID number (integer).
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            text = response.text.strip()
+            # Cleanup possible markdown or extra chars
+            text = "".join([c for c in text if c.isdigit()])
+            if not text: return None
+            
+            cid = int(text)
+            if cid == 0: return None
+            return cid
+            
+        except Exception as e:
+            logger.error(f"Classification Error: {e}")
+            return None
 
 
 def get_provider(name: str = "gemini") -> LLMProvider:

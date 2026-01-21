@@ -33,7 +33,15 @@ def main():
     llm = get_provider(settings.DEFAULT_LLM_PROVIDER)
     
     # 2. Fetch
-    # 2. Fetch Collections
+    # 2.1 Auto-Classify Unsorted (Beta)
+    if settings.ENABLE_AUTO_ORGANIZER:
+        from .organizer import RaindropOrganizer
+        organizer = RaindropOrganizer(raindrop_client, llm)
+        organizer.run()
+    else:
+        logger.info("Auto-Organizer disabled (ENABLE_AUTO_ORGANIZER=false).")
+
+    # 2.2 Fetch Collections
     logger.info("Fetching Collections...")
     collections = raindrop_client.get_collections()
     logger.info(f"Found {len(collections)} collections to process (skipping Unsorted).")
@@ -95,6 +103,7 @@ def main():
                 # 5. LLM Summarize
                 summary = ""
                 images_md = ""
+                images_html_block = ""
 
                 # --- AI Director Mode (beta) ---
                 # Only for videos < 10 mins to save bandwidth/time

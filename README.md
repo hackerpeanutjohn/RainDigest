@@ -4,6 +4,7 @@ Automates the process of fetching video bookmarks from Raindrop.io, extracting m
 
 ## Features
 - **Auto-Sync**: Scans your Raindrop.io collections for new video bookmarks.
+- **Auto-Classification (Beta)**: Automatically moves items from "Unsorted" to the most relevant collection using LLM analysis.
 - **AI Director Mode (Beta)**: Automatically identifies high-value moments (charts, lists, key slides) in videos under 10 minutes and captures keyframes.
 - **Smart Summarization**: Generates structured notes including "The Gist", "Key Takeaways", and "Critical Perspectives".
 - **Multi-Source Support**: Handles YouTube, Instagram/Facebook Reels, and more via `yt-dlp`.
@@ -36,16 +37,25 @@ cp .env.example .env
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_DOMAIN`: Required for hosting images on Cloudflare R2.
 - `MAX_ITEMS`: Maximum number of bookmarks to process per run (default: 50).
 - `DRY_RUN`: Set to `true` to test fetching without consuming LLM credits.
+- `ENABLE_AUTO_ORGANIZER`: Set to `true` (default) to enable auto-sorting of Unsorted items. Set to `false` to disable.
 
 ### 3. Run
-Start the service:
+**Full Service (Summarizer + Organizer)**:
 ```bash
 docker compose up --build
 ```
 
+**Organizer Only (Standalone)**:
+To run only the auto-classification without summarization:
+```bash
+docker compose run --rm app python organize.py
+```
+(Or locally: `python organize.py`)
+
 ## How It Works
-1. **Fetch**: Scans Raindrop collections (excluding "Unsorted" by default).
-2. **Download**: Uses `yt-dlp` to fetch metadata and subtitles. If no subtitles exist, it downloads the audio.
+1. **Fetch**: Scans Raindrop collections.
+2. **Organize**: (If enabled) Checks "Unsorted" collection, asks AI to classify items, and moves them to the best matching collection.
+3. **Download**: Uses `yt-dlp` to fetch metadata and subtitles. If no subtitles exist, it downloads the audio.
 3. **AI Director**: For short videos, it asks Gemini to "watch" or "listen" and find the best timestamps for screenshots.
 4. **Summarize**: Sends the transcript/audio to the LLM to generate a structured summary.
 5. **Sync**: 

@@ -142,4 +142,22 @@ class RaindropClient:
         except Exception as e:
             logger.error(f"Failed to update bookmark {raindrop_id}: {e}")
 
+    def move_bookmark(self, raindrop_id: int, collection_id: int):
+        """
+        Move a bookmark to a different collection.
+        """
+        url = f"{self.BASE_URL}/raindrop/{raindrop_id}"
+        payload = {
+            "collection": {
+                "$id": collection_id
+            }
+        }
+        try:
+            requests.put(url, headers=self.headers, json=payload)
+            logger.info(f"Moved bookmark {raindrop_id} to collection {collection_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to move bookmark {raindrop_id}: {e}")
+            return False
+
 raindrop_client = RaindropClient()

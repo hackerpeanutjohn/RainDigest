@@ -63,7 +63,26 @@ def main():
         logger.info(f"--- Collection: {c_title} [{c_id}] ---")
         
         candidates = raindrop_client.get_candidate_bookmarks(collection_id=c_id)
-        new_candidates = [c for c in candidates if c['_id'] not in history]
+        
+        # Filter candidates:
+        # 1. Not in local history
+        # 2. Does not have 'summarized' tag (Cloud State)
+        new_candidates = []
+        for c in candidates:
+            if c['_id'] in history:
+                continue
+            
+            tags = c.get('tags', [])
+            if 'summarized' in tags:
+                logger.info(f"Skipping {c.get('title')} (Already tagged #summarized)")
+                # Update local history to be in sync if missing
+                history.add(c['_id'])
+                continue
+                
+            new_candidates.append(c)
+        
+        # Save history if we updated it with skipped items
+        save_history(history)
         
         logger.info(f"Unprocessed in '{c_title}': {len(new_candidates)}")
         

@@ -2,7 +2,8 @@ import abc
 import os
 from pathlib import Path
 from typing import Optional
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from loguru import logger
 from .config import settings, DEFAULT_SYSTEM_PROMPT
 
@@ -28,15 +29,14 @@ class GeminiProvider(LLMProvider):
         if not settings.GEMINI_API_KEY:
             logger.warning("Gemini API Key not found.")
         else:
-            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
             # Try specific version 
             self.model_name = 'gemini-2.0-flash'
-            self.model = genai.GenerativeModel(self.model_name) 
 
     def summarize_text(self, text: str) -> str:
         prompt = f"{DEFAULT_SYSTEM_PROMPT}\n\n逐字稿內容：\n{text}"
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
             return response.text
         except Exception as e:
             logger.error(f"Gemini Error on {self.model_name}: {e}")
@@ -46,9 +46,10 @@ class GeminiProvider(LLMProvider):
     def _log_available_models(self):
         try:
             logger.info("Listing available models...")
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    logger.info(f" - {m.name}")
+            # Pager object, iterate to get models
+            for m in self.client.models.list():
+                # supported_generation_methods might be part of model metadata
+                logger.info(f" - {m.name}")
         except Exception as e:
             logger.error(f"Failed to list models: {e}")
 
@@ -84,7 +85,7 @@ class GeminiProvider(LLMProvider):
             # Force JSON response if possible, or just parse text
             # Gemini 1.5/2.0 supports response_mime_type="application/json" usually
             # But let's rely on prompt first for compatibility
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
             text = response.text
             
             # Clean markdown code blocks
@@ -123,19 +124,20 @@ class GeminiProvider(LLMProvider):
             # We will just upload/process normally.
             
             import time
+            import time
             logger.info(f"Uploading audio for Visual Analysis: {audio_path}")
-            audio_file = genai.upload_file(path=audio_path)
+            audio_file = self.client.files.upload(file=audio_path)
             
             # Wait for processing
-            while audio_file.state.name == "PROCESSING":
+            while audio_file.state == "PROCESSING":
                 time.sleep(1)
-                audio_file = genai.get_file(audio_file.name)
+                audio_file = self.client.files.get(name=audio_file.name)
                 
-            if audio_file.state.name == "FAILED":
+            if audio_file.state == "FAILED":
                 logger.error("Audio processing failed.")
                 return []
                 
-            response = self.model.generate_content([system_prompt, audio_file])
+            response = self.client.models.generate_content(model=self.model_name, contents=[system_prompt, audio_file])
             text = response.text
             
             # Cleanup
@@ -182,20 +184,21 @@ class GeminiProvider(LLMProvider):
 """
         try:
             import time
+            import time
             logger.info(f"Uploading Video to Gemini for Visual Analysis: {video_path.name}...")
-            video_file = genai.upload_file(path=video_path)
+            video_file = self.client.files.upload(file=video_path)
             
             # Wait for processing (Video takes longer)
-            while video_file.state.name == "PROCESSING":
+            while video_file.state == "PROCESSING":
                 time.sleep(2)
-                video_file = genai.get_file(video_file.name)
+                video_file = self.client.files.get(name=video_file.name)
                 
-            if video_file.state.name == "FAILED":
+            if video_file.state == "FAILED":
                 logger.error("Video processing failed.")
                 return []
                 
             logger.info("Video processed. Asking Gemini to find timestamps...")
-            response = self.model.generate_content([system_prompt, video_file])
+            response = self.client.models.generate_content(model=self.model_name, contents=[system_prompt, video_file])
             text = response.text
             
             # Helper to parse JSON
@@ -216,15 +219,15 @@ class GeminiProvider(LLMProvider):
         logger.info(f"Uploading file to Gemini: {audio_path}")
         try:
             # Upload file
-            audio_file = genai.upload_file(path=audio_path)
+            audio_file = self.client.files.upload(file=audio_path)
             
             # Wait for processing
             logger.info("Waiting for file processing...")
-            while audio_file.state.name == "PROCESSING":
+            while audio_file.state == "PROCESSING":
                 time.sleep(2)
-                audio_file = genai.get_file(audio_file.name)
+                audio_file = self.client.files.get(name=audio_file.name)
                 
-            if audio_file.state.name == "FAILED":
+            if audio_file.state == "FAILED":
                 raise ValueError("Gemini file processing failed.")
             
             logger.info("File ready. Generating summary...")
@@ -233,7 +236,7 @@ class GeminiProvider(LLMProvider):
             prompt = f"{DEFAULT_SYSTEM_PROMPT}\n\n(請根據提供的音訊檔進行整理)"
             
             # Generate
-            response = self.model.generate_content([prompt, audio_file])
+            response = self.client.models.generate_content(model=self.model_name, contents=[prompt, audio_file])
             return response.text
         except Exception as e:
             logger.error(f"Gemini processing error: {e}")
@@ -255,7 +258,7 @@ class GeminiProvider(LLMProvider):
         """
         
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
             return response.text.strip()
         except Exception as e:
             logger.error(f"Title Gen Error: {e}")
@@ -288,7 +291,7 @@ class GeminiProvider(LLMProvider):
         """
         
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
             text = response.text.strip()
             # Cleanup possible markdown or extra chars
             text = "".join([c for c in text if c.isdigit()])

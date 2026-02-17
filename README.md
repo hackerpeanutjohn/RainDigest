@@ -92,3 +92,7 @@ docker compose run --rm app python organize.py
 - [ ] Support for long-form video (>30 mins) chunking.
 - [ ] Support for Podcasting feeds.
 - [ ] Web Dashboard for status monitoring.
+
+
+## build 
+docker build --platform linux/amd64 -t jjdock1112/raindigest:latest . && docker push jjdock1112/raindigest:latest

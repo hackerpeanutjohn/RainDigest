@@ -2,12 +2,13 @@ version: '3.8'
 
 services:
   app:
-    build: .
+    # build: .
+    image: jjdock1112/raindigest:latest
     volumes:
       - ./output:/app/output
       - ./data:/app/data
       - ./.env:/app/.env
-      - ./src:/app/src
+      # - ./src:/app/src
     env_file:
       - .env
     environment:
@@ -15,4 +16,7 @@ services:
     # For development, you might want to keep it running
     # command: tail -f /dev/null
     # For production task:
-    command: python -m src.main
+    restart: always
+    # For production task (Service Mode for NAS):
+    # Run once, sleep 1 hour (3600s), then loop.
+    command: sh -c "while true; do python -m src.main; echo 'Sleeping 1 hour...'; sleep 3600; done"

@@ -15,42 +15,73 @@ Automates the process of fetching video bookmarks from Raindrop.io, extracting m
 - **Cloud Storage**: Optional Cloudflare R2 integration for hosting captured keyframes with automatic 30-day retention cleanup.
 - **Auto-Tagging**: Marks processed items with a `#summarized` tag in Raindrop.
 
+## Quick Start
+
+```bash
+# 1. Clone
+git clone https://github.com/John-Thunder/RainDigest.git
+cd RainDigest
+
+# 2. Configure
+cp .env.example .env
+# Edit .env and fill in your tokens (see below)
+
+# 3. Run (pulls pre-built image from Docker Hub)
+docker compose up -d
+```
+
+**Want to build from source instead?**
+```bash
+docker build -t jjdock1112/raindigest:latest .
+docker compose up -d
+```
+
 ## Setup
 
-### 1. Prerequisites
+### Prerequisites
 - **Docker & Docker Compose**
 - **Raindrop.io Account**
-- **AI API Key**: Gemini API Key (Recommended, free tier available) or OpenAI API Key.
+- **AI API Key**: Gemini API Key (Recommended, free tier available).
 
-### 2. Configuration
-Copy the example environment file and edit it:
-```bash
-cp .env.example .env
-```
+### Configuration
 
-**Required Variables**:
-- `RAINDROP_TOKEN`: Get a "Test Token" from [Raindrop Integrations](https://app.raindrop.io/settings/integrations).
-- `GEMINI_API_KEY`: Get it from [Google AI Studio](https://aistudio.google.com/).
+**Required**:
+| Variable | Description | Where to get it |
+|---|---|---|
+| `RAINDROP_TOKEN` | Raindrop.io Test Token | [Raindrop Integrations](https://app.raindrop.io/settings/integrations) |
+| `GEMINI_API_KEY` | Google Gemini API Key | [Google AI Studio](https://aistudio.google.com/) |
 
-**Optional Variables**:
-- `READWISE_TOKEN`: To sync summaries to Readwise Reader.
-- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_DOMAIN`: Required for hosting images on Cloudflare R2.
-- `MAX_ITEMS`: Maximum number of bookmarks to process per run (default: 50).
-- `DRY_RUN`: Set to `true` to test fetching without consuming LLM credits.
-- `ENABLE_AUTO_ORGANIZER`: Set to `true` (default) to enable auto-sorting of Unsorted items. Set to `false` to disable.
+**Optional**:
+| Variable | Default | Description |
+|---|---|---|
+| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model to use (e.g. `gemini-2.5-pro`) |
+| `GEMINI_PROCESSING_TIMEOUT` | `300` | Max seconds to wait for Gemini file processing |
+| `READWISE_TOKEN` | — | Sync summaries to Readwise Reader |
+| `R2_ACCOUNT_ID` | — | Cloudflare R2 (for hosting keyframe images) |
+| `R2_ACCESS_KEY_ID` | — | Cloudflare R2 |
+| `R2_SECRET_ACCESS_KEY` | — | Cloudflare R2 |
+| `R2_BUCKET_NAME` | — | Cloudflare R2 |
+| `R2_PUBLIC_DOMAIN` | — | Cloudflare R2 |
+| `MAX_ITEMS` | `50` | Max bookmarks to process per run |
+| `DRY_RUN` | `false` | Test fetching without consuming LLM credits |
+| `ENABLE_AUTO_ORGANIZER` | `true` | Auto-sort Unsorted items via LLM |
 
-### 3. Run
+### Run
+
 **Full Service (Summarizer + Organizer)**:
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
-**Organizer Only (Standalone)**:
-To run only the auto-classification without summarization:
+**One-shot (no loop)**:
+```bash
+docker compose run --rm app python -m src.main
+```
+
+**Organizer Only**:
 ```bash
 docker compose run --rm app python organize.py
 ```
-(Or locally: `python organize.py`)
 
 ## How It Works
 1. **Fetch**: Scans Raindrop collections.
@@ -93,6 +124,10 @@ docker compose run --rm app python organize.py
 - [ ] Support for Podcasting feeds.
 - [ ] Web Dashboard for status monitoring.
 
+## Build & Publish
 
-## build 
-docker build --platform linux/amd64 -t jjdock1112/raindigest:latest . && docker push jjdock1112/raindigest:latest
+For maintainers — build a multi-arch image and push to Docker Hub:
+```bash
+docker build --platform linux/amd64 -t jjdock1112/raindigest:latest .
+docker push jjdock1112/raindigest:latest
+```

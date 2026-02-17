@@ -1,15 +1,25 @@
 import json
 import time
 import os
+import html
 from pathlib import Path
 from loguru import logger
 from datetime import datetime
+from urllib.parse import urlparse
 from .config import settings
 from .raindrop import raindrop_client
 from .media import VideoProcessor
 from .llm import get_provider
 
 HISTORY_FILE = settings.DATA_DIR / "history.json"
+
+def _sanitize_url(url: str) -> str:
+    """Reject non-http(s) URLs to prevent XSS via javascript: URIs."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https', ''):
+        logger.warning(f"Blocked non-HTTP URL scheme: {parsed.scheme}")
+        return "#"
+    return url
 
 def load_history() -> set:
     if HISTORY_FILE.exists():
@@ -131,8 +141,6 @@ def main():
                 
                 if video_id and duration_sec > 0 and duration_sec < 600:
                     logger.info("🎬 Entering AI Director Mode...")
-                if video_id and duration_sec > 0 and duration_sec < 600:
-                    logger.info("🎬 Entering AI Director Mode...")
                     try:
                         # 1. Init vars
                         visual_cues = []
@@ -149,12 +157,12 @@ def main():
                             if visual_cues:
                                 # We have cues, NOW download the video to capture them
                                 logger.info(f"Found {len(visual_cues)} cues. Downloading video...")
-                                temp_vid_path = video_processor.download_video_temp(url)
+                                temp_vid_path = video_processor.download_video_temp(url, video_id=video_id)
                                 
                         else:
                             # Strategy B: Video Analysis (Accurate, Fallback for FB/Reels)
                             logger.info("No transcript found. Downloading Video for Visual Analysis...")
-                            temp_vid_path = video_processor.download_video_temp(url)
+                            temp_vid_path = video_processor.download_video_temp(url, video_id=video_id)
                             
                             if temp_vid_path and temp_vid_path.exists():
                                 logger.info("Video downloaded. Asking AI to watch and find highlights...")
@@ -279,11 +287,17 @@ def main():
                 # Extensions: extra (tables, footnotes), nl2br (newlines to br)
                 html_rendered_summary = markdown.markdown(summary, extensions=['extra', 'nl2br'])
                 
+                # Sanitize & escape for HTML
+                safe_url = _sanitize_url(url)
+                escaped_url = html.escape(safe_url)
+                escaped_uploader = html.escape(uploader)
+                escaped_collection = html.escape(c_title)
+                
                 # Add Metadata header to HTML
                 html_header = f"""
-                <p><strong>Source:</strong> <a href="{url}">{url}</a></p>
-                <p><strong>Author:</strong> {uploader}</p>
-                <p><strong>Collection:</strong> {c_title}</p>
+                <p><strong>Source:</strong> <a href="{escaped_url}">{escaped_url}</a></p>
+                <p><strong>Author:</strong> {escaped_uploader}</p>
+                <p><strong>Collection:</strong> {escaped_collection}</p>
                 <hr>
                 """
                 

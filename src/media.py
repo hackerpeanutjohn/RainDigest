@@ -148,12 +148,14 @@ class VideoProcessor:
                         logger.error(f"Error reading {path}: {e}")
         return ""
 
-    def download_video_temp(self, url: str) -> Optional[Path]:
+    def download_video_temp(self, url: str, video_id: str = "temp") -> Optional[Path]:
         """
         Download video for frame extraction (temp usage).
         Returns path to .mp4 file.
         """
-        out_tmpl = str(self.output_dir / "temp_director_video.%(ext)s")
+        safe_id = "".join(c for c in video_id if c.isalnum() or c in ('-', '_'))[:50] or "temp"
+        base_name = f"temp_{safe_id}"
+        out_tmpl = str(self.output_dir / f"{base_name}.%(ext)s")
         # Ensure we get mp4 for opencv compatibility
         # Force H.264 (avc1) to avoid AV1 issues on some platforms (like ARM64 docker)
         ydl_opts = {
@@ -163,7 +165,7 @@ class VideoProcessor:
             'overwrites': True,
         }
         # Prevent stale file usage: explicitly delete temp file if it exists
-        temp_file = self.output_dir / "temp_director_video.mp4"
+        temp_file = self.output_dir / f"{base_name}.mp4"
         if temp_file.exists():
             try:
                 os.remove(temp_file)
@@ -176,11 +178,10 @@ class VideoProcessor:
                 ydl.download([url])
                 # Find the file (yt-dlp might change extension slightly?)
                 # We forced mp4/mkv, but let's check.
-                # Usually it will be temp_director_video.mp4
-                p = self.output_dir / "temp_director_video.mp4"
+                p = self.output_dir / f"{base_name}.mp4"
                 if p.exists(): return p
                 # Fallback check
-                for f in self.output_dir.glob("temp_director_video.*"):
+                for f in self.output_dir.glob(f"{base_name}.*"):
                     return f
                 return None
         except Exception as e:

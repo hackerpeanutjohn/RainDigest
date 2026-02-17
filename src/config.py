@@ -18,6 +18,8 @@ class Settings:
     
     # LLM
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_PROCESSING_TIMEOUT: int = int(os.getenv("GEMINI_PROCESSING_TIMEOUT", "300"))
     
     # Paths
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "./output"))

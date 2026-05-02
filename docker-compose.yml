@@ -8,7 +8,12 @@ services:
       - ./output:/app/output
       - ./data:/app/data
       - ./.env:/app/.env
-      # - ./src:/app/src
+      - ./src:/app/src
+      # Claude Code CLI: share binary + auth from host
+      - /root/.local/share/claude:/root/.local/share/claude:ro
+      - /root/.local/bin/claude:/usr/local/bin/claude:ro
+      - /root/.claude:/root/.claude
+      - /root/.claude.json:/root/.claude.json
     env_file:
       - .env
     environment:

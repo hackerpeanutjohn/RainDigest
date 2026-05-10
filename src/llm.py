@@ -61,7 +61,7 @@ class GeminiProvider(LLMProvider):
         )
         # Try Claude Code first if enabled (text-only task, no multimodal needed)
         try:
-            from .claude_code_provider import call_claude_code, is_enabled
+            from .cli_providers import call_cli_with_fallback as call_claude_code, is_enabled
             if is_enabled():
                 return call_claude_code(prompt, context="summarize_text")
         except Exception as e:
@@ -120,7 +120,7 @@ class GeminiProvider(LLMProvider):
         # Try Claude Code first (text-only, JSON output)
         text = None
         try:
-            from .claude_code_provider import call_claude_code, is_enabled
+            from .cli_providers import call_cli_with_fallback as call_claude_code, is_enabled
             if is_enabled():
                 text = call_claude_code(prompt, context="analyze_visual_cues")
         except Exception as e:
@@ -269,7 +269,7 @@ class GeminiProvider(LLMProvider):
         Title:
         """
         try:
-            from .claude_code_provider import call_claude_code, is_enabled
+            from .cli_providers import call_cli_with_fallback as call_claude_code, is_enabled
             if is_enabled():
                 return call_claude_code(prompt, context="generate_title").strip()
         except Exception as e:
@@ -312,7 +312,7 @@ class GeminiProvider(LLMProvider):
         
         text = None
         try:
-            from .claude_code_provider import call_claude_code, is_enabled
+            from .cli_providers import call_cli_with_fallback as call_claude_code, is_enabled
             if is_enabled():
                 text = call_claude_code(prompt, context="classify_bookmark")
         except Exception as e:

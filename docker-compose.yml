@@ -9,15 +9,20 @@ services:
       - ./data:/app/data
       - ./.env:/app/.env
       - ./src:/app/src
-      # Claude Code CLI: share binary + auth from host
+      # Claude Code CLI
       - /root/.local/share/claude:/root/.local/share/claude:ro
       - /root/.local/bin/claude:/usr/local/bin/claude:ro
       - /root/.claude:/root/.claude
       - /root/.claude.json:/root/.claude.json
+      # Gemini CLI + Codex (Node.js based)
+      - /root/.nvm/versions/node/v24.13.0:/opt/node:ro
+      - /root/.codex:/root/.codex
+      - /root/.gemini:/root/.gemini
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     # For development, you might want to keep it running
     # command: tail -f /dev/null
     # For production task:
